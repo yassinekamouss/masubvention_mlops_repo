@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+pdfplumber
+httpx
+typing-extensions
+langgraph
+langchain-deepseek
+langchain-openai
+
