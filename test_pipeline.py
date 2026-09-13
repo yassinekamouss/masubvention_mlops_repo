@@ -272,6 +272,64 @@ class TestMLOpsPipeline(unittest.TestCase):
         self.assertEqual(res_extract.json()["status"], "processing")
         self.assertIn("Dossier 123 received", res_extract.json()["message"])
 
+    def test_magic_rules_single_branch(self):
+        """Vérifie la génération d'un profil simple via RuleGeneratorService."""
+        from app.services.rule_generator_service import RuleGeneratorService
+
+        prompt = "Entreprises industrielles basées à Casablanca avec un chiffre d'affaires supérieur à 1 000 000 MAD"
+        res = RuleGeneratorService.generate_rules(prompt)
+        self.assertTrue(res.success)
+        self.assertGreaterEqual(len(res.profiles), 1)
+
+        profile = res.profiles[0]
+        self.assertEqual(profile.regionsMode, "SPECIFIC")
+        self.assertIn("Casablanca-Settat", profile.regions)
+        self.assertEqual(profile.caMin, 1000000.0)
+
+    def test_magic_rules_dnf_multi_branches(self):
+        """Vérifie que le 'OU' génère plusieurs profils distincts (Logique DNF)."""
+        from app.services.rule_generator_service import RuleGeneratorService
+
+        prompt = (
+            "Entreprises dans l'automobile à Casablanca ou Tanger avec CA supérieur à 2 millions MAD, "
+            "OU startups technologiques à Rabat de moins de 3 ans"
+        )
+        res = RuleGeneratorService.generate_rules(prompt)
+        self.assertTrue(res.success)
+        self.assertEqual(len(res.profiles), 2)
+
+        # Profil 1 : Auto / Casa-Tanger / CA > 2M
+        p1 = res.profiles[0]
+        self.assertEqual(p1.regionsMode, "SPECIFIC")
+        self.assertIn("Casablanca-Settat", p1.regions)
+        self.assertIn("Tanger-Tétouan-Al Hoceïma", p1.regions)
+        self.assertIn("IndustrieAutomobile", p1.secteurs)
+        self.assertEqual(p1.caMin, 2000000.0)
+
+        # Profil 2 : Tech / Rabat / < 3 ans
+        p2 = res.profiles[1]
+        self.assertEqual(p2.regionsMode, "SPECIFIC")
+        self.assertIn("Rabat-Salé-Kénitra", p2.regions)
+        self.assertTrue(
+            "SolutionsDigitalesNTIC" in p2.secteurs or "Informatique" in p2.secteurs
+        )
+        self.assertEqual(p2.creationMode, "NEW_UNDER_3")
+
+    def test_magic_rules_fastapi_endpoint(self):
+        """Vérifie le endpoint POST /api/v1/rules/generate."""
+        client = TestClient(main.app)
+        payload = {
+            "prompt": "PME à Marrakech dans le tourisme avec CA entre 500k et 5M MAD",
+            "context": {"name": "Programme Tourisme Durable", "description": "Soutien régional"}
+        }
+        res = client.post("/api/v1/rules/generate", json=payload)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data["success"])
+        self.assertGreaterEqual(len(data["profiles"]), 1)
+        self.assertIn("Marrakech-Safi", data["profiles"][0]["regions"])
+        self.assertIn("ActiviteTouristique", data["profiles"][0]["secteurs"])
+
 
 if __name__ == "__main__":
     unittest.main()
