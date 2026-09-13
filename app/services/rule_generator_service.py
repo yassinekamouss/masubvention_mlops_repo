@@ -154,10 +154,11 @@ RÉFÉRENTIELS STRICTS MAROCAINS (NE JAMAIS INVENTER D'AUTRES VALEURS) :
 - Formes juridiques exactes : ['sarl', 'sarlau', 'societe-sas', 'societe-anonyme', 'auto-entrepreneur', 'personne-physique-patente', 'coopérative']
 - Mode maturité creationMode : 'ALL' (toutes), 'NEW_UNDER_3' (moins de 3 ans / nouvelles), 'ESTABLISHED_OVER_3' (plus de 3 ans), ou 'CUSTOM'
 
-RÈGLES DE MAPPING :
+RÈGLES DE MAPPING ET ANTI-HALLUCINATION :
+- Si l'utilisateur demande une région ou un secteur qui n'est pas dans la liste exacte fournie, tu dois l'ignorer ou le mapper sur 'ALL'. Ne génère jamais de valeurs hors-référentiel.
 - Si l'admin mentionne "Casablanca" ou "Tanger", mappe exactement vers "Casablanca-Settat" et "Tanger-Tétouan-Al Hoceïma" avec regionsMode="SPECIFIC".
 - Si l'admin ne précise pas de région, mets regionsMode="ALL" et regions=[].
-- Si l'admin mentionne des montants de Chiffre d'Affaires (ex: "CA supérieur à 1 million" ou "> 1M MAD"), renseigne caMin=1000000. Si "CA < 500k", caMax=500000, hasNoCaMax=false.
+- Parsing Financier : Convertis toutes les expressions financières (1M, 500k, 2 millions) en entiers mathématiques bruts (1000000, 500000, 2000000) pour les champs caMin et caMax. Par exemple "CA supérieur à 1 million" ou "> 1M MAD" -> caMin=1000000. Si "CA < 500k", caMax=500000, hasNoCaMax=false.
 - Donne à chaque profil un `name` clair et lisible (ex: "Profil 1 - Industrie Casablanca", "Profil 2 - Startups Rabat").
 - Rédige un `summary` concis et professionnel en français résumant les règles configurées.
 
@@ -276,7 +277,7 @@ Contexte du programme : Nom: {program_name} | Description: {program_desc}
                             num *= 1_000_000
                         elif "k" in unit:
                             num *= 1_000
-                    profile.caMin = num
+                    profile.caMin = int(num)
                 except ValueError:
                     pass
 
@@ -295,7 +296,7 @@ Contexte du programme : Nom: {program_name} | Description: {program_desc}
                             num *= 1_000_000
                         elif "k" in unit:
                             num *= 1_000
-                    profile.caMax = num
+                    profile.caMax = int(num)
                     profile.hasNoCaMax = False
                 except ValueError:
                     pass
