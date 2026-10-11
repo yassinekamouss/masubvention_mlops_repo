@@ -214,8 +214,10 @@ class WebhookService:
         activite_projet = f"Création et modernisation d'unités de production et services spécialisés en {human_branche}"
         biens_services = f"Prestations et solutions techniques spécialisées en {human_branche}"
 
+        from app.services.consultant_service import VirtualConsultantService
         presentation_projet_text = narratives.get("presentation_projet") or f"Projet d'investissement et de modernisation industrielle TPME - Secteur {human_branche}"
-        description_projet = projet_info.get("description") or presentation_projet_text
+        raw_desc = projet_info.get("description") or presentation_projet_text
+        description_projet = VirtualConsultantService.sanitize_plain_text(raw_desc)
 
         final_projet = {
             "description": description_projet,

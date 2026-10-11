@@ -54,10 +54,18 @@ class VirtualConsultantService:
 
         primes = financial_data.get("synthese_primes", {})
         zone = primes.get("zone", "ZONE_A")
-        taux_terri = primes.get("taux_territoriale", 10)
-        taux_sect = primes.get("taux_sectorielle", 0)
-        bonus_eco = primes.get("bonus_ecologique", 0)
-        taux_global = primes.get("taux_global", 15)
+
+        def _to_pct(val, default):
+            try:
+                f = float(val)
+                return round(f * 100, 1) if 0 < f <= 1 else round(f, 1)
+            except Exception:
+                return default
+
+        taux_terri = _to_pct(primes.get("taux_territoriale"), 10.0)
+        taux_sect = _to_pct(primes.get("taux_sectorielle") or primes.get("taux_emploi"), 0.0)
+        bonus_eco = _to_pct(primes.get("bonus_ecologique") or primes.get("taux_prioritaire"), 0.0)
+        taux_global = _to_pct(primes.get("taux_global"), 15.0)
         subvention_estimee = primes.get("montant_subvention_estime", 0)
 
         cpc = financial_data.get("cpc", {})
@@ -72,6 +80,9 @@ class VirtualConsultantService:
         region = stepper_data.get("region_id") or test_data.get("region") or projet_dict.get("region") or "Casablanca-Settat"
         lieu = stepper_data.get("adresse_projet") or stepper_data.get("province_id") or projet_dict.get("lieu_realisation") or "Zone Industrielle"
 
+        total_capex_fmt = f"{total_capex:,.0f}".replace(",", " ") if isinstance(total_capex, (int, float)) and total_capex > 0 else "de premier plan"
+        subv_fmt = f"{subvention_estimee:,.0f}".replace(",", " ") if isinstance(subvention_estimee, (int, float)) and subvention_estimee > 0 else "substantielle"
+
         narratives = None
         if llm:
             try:
@@ -82,30 +93,41 @@ Ton objectif est de rédiger un dossier d'argumentation d'investissement irrépr
 
 Informations sur l'entreprise :
 - Raison sociale : {company_name} ({forme_juridique})
-- Secteur d'activité : {secteur}
+- Secteur / Métier : {secteur}
 - Implantation : {lieu} ({region}) - {zone}
 - Activité statutaire / détaillée : {pdf_info.get('activite_statutaire', 'Non renseigné')}
 
 Données financières déterministes validées :
-- Montant total du programme d'investissement : {total_capex} MAD
+- Montant total du programme d'investissement : {total_capex_fmt} MAD
 - Financement : {part_fp}% Fonds propres / {part_dette}% Crédit bancaire
 - Prime territoriale : {taux_terri}% ({zone})
 - Prime sectorielle : {taux_sect}%
-- Bonus écologique : {bonus_eco}%
-- Taux global de subvention : {taux_global}% (Subvention estimée : {subvention_estimee} MAD)
-- Chiffre d'affaires à maturité : {ca_croisiere} KMAD
+- Bonus prioritaire / transition écologique : {bonus_eco}%
+- Taux global de subvention : {taux_global}% (Subvention estimée : {subv_fmt} MAD)
+- Chiffre d'affaires à maturité : {ca_croisiere:,.0f} KMAD
 - Emplois directs stables à créer : {emplois_directs}
 - Emplois indirects : {emplois_indirects}
 
-Rédige les 4 sections obligatoires suivantes avec une haute exigence de rigueur économique et financière :
-1. `presentation_projet` : Synthèse de l'opportunité d'investissement, modèle économique, pertinence technologique et alignement avec la Charte de l'Investissement.
-2. `coherence_territoriale` : Justification de l'implantation dans la région {region}, intégration dans l'écosystème territorial et conformité avec les critères de la prime territoriale ({zone}).
-3. `impact_socio_economique_argumentaire` : Valorisation de la création d'emplois ({emplois_directs} directs), montée en compétences, inclusion/parité et contribution à la transition écologique.
-4. `viabilite_financiere` : Démonstration de la solidité financière, rentabilité d'exploitation, capacité d'autofinancement et maîtrise du ratio dette/fonds propres.
+DIRECTIVES IMPÉRATIVES DE STYLE ET DE FORME :
+1. Rédige chaque section sous forme de 1 à 2 paragraphes continus de prose professionnelle, fluide et élégante.
+2. INTERDICTION FORMELLE d'utiliser de la syntaxe Markdown : AUCUN titre (#, ##, ###), AUCUNE astérisque pour le gras (** ou *), AUCUNE puce de liste (-, *), et ABSOLUMENT AUCUN tableau Markdown (|---|).
+3. INTERDICTION d'ajouter des en-têtes généraux du type "DOSSIER D'ARGUMENTATION", "Soumis à la CRUI", ou des sous-titres numérotés ("1.1", "1.2"). Entre directement dans le vif du sujet.
+4. Les pourcentages doivent obligatoirement reprendre les vraies valeurs ci-dessus ({taux_global}% de subvention globale, {taux_terri}% de prime territoriale). N'écris jamais 0,2% ou 0,1%.
+
+Rédige les 4 sections obligatoires suivantes :
+1. `presentation_projet` : Synthèse concise de l'opportunité d'investissement, modèle économique, pertinence technologique et alignement avec la Charte de l'Investissement.
+2. `coherence_territoriale` : Justification de l'implantation dans la région {region}, intégration dans l'écosystème territorial et valorisation de la prime territoriale ({zone} à {taux_terri}%).
+3. `impact_socio_economique_argumentaire` : Valorisation de la création de {emplois_directs} emplois directs stables, montée en compétences et politique d'inclusion/durabilité.
+4. `viabilite_financiere` : Démonstration de la solidité du montage ({part_fp}% fonds propres, {part_dette}% crédit bancaire), rentabilité d'exploitation et capacité de remboursement.
 """
                 result = structured_llm.invoke(prompt)
-                narratives = result.model_dump() if hasattr(result, 'model_dump') else dict(result)
-                logger.info(f"[{dossier_id}] Argumentaires générés via LLM avec succès.")
+                raw_dict = result.model_dump() if hasattr(result, 'model_dump') else dict(result)
+                # Assainissement anti-markdown strict sur chaque section
+                narratives = {
+                    k: cls.sanitize_plain_text(raw_dict.get(k, ""))
+                    for k in ["presentation_projet", "coherence_territoriale", "impact_socio_economique_argumentaire", "viabilite_financiere"]
+                }
+                logger.info(f"[{dossier_id}] Argumentaires générés via LLM et assainis avec succès.")
             except Exception as e:
                 logger.warning(f"[{dossier_id}] Erreur LLM Consultant Virtuel: {e}. Bascule sur le générateur déterministe.")
 
@@ -193,3 +215,59 @@ Rédige les 4 sections obligatoires suivantes avec une haute exigence de rigueur
                 f"le service de la dette bancaire tout en préservant le fonds de roulement."
             ),
         }
+
+    @staticmethod
+    def sanitize_plain_text(text: str) -> str:
+        """Strips raw markdown syntax (asterisks, pipes, headers, preamble banners) into clean continuous prose."""
+        if not text:
+            return ""
+        import re
+
+        lines = text.split("\n")
+        cleaned_lines = []
+        for line in lines:
+            l = line.strip()
+            if not l:
+                continue
+
+            # 1. Éliminer les en-têtes préambules parasites de type document
+            if l.upper().startswith("*DOSSIER") or l.upper().startswith("DOSSIER D'ARGUMENTATION"):
+                continue
+            if "Soumis à la Commission" in l or ("Commission Régionale Unifiée" in l and ("CRUI" in l or "Soumis" in l)):
+                continue
+            if "Cadre de référence" in l or "Loi-cadre n° 03-22" in l:
+                continue
+            if re.match(r"^[-=_*]{3,}$", l):
+                continue
+
+            # 2. Éliminer ou convertir les tables markdown (| col1 | col2 |)
+            if l.startswith("|") and l.endswith("|"):
+                if re.match(r"^\|[\s\-:|]+\|$", l):
+                    continue
+                parts = [p.strip() for p in l.split("|") if p.strip()]
+                if len(parts) >= 2:
+                    if any(h in parts[0].lower() for h in ["critère", "indicateur", "colonne", "réponse"]):
+                        continue
+                    l = f"{parts[0]} : {parts[1]}"
+                elif len(parts) == 1:
+                    l = parts[0]
+
+            # 3. Supprimer les balises de titres (# Titre, ### 1. Titre, 1.1 Titre)
+            l = re.sub(r"^#{1,6}\s*", "", l)
+            l = re.sub(r"^\d+\.\d+\.?\s*", "", l)
+
+            # 4. Supprimer le gras et italique markdown (**mot**, *mot*)
+            l = re.sub(r"\*\*([^*]+)\*\*", r"\1", l)
+            l = re.sub(r"\*([^*]+)\*", r"\1", l)
+            l = l.replace("**", "").replace("*", "")
+
+            # 5. Supprimer les tirets ou puces en début de ligne
+            l = re.sub(r"^[-+•]\s*", "", l)
+
+            if l:
+                cleaned_lines.append(l)
+
+        # Joindre en paragraphes cohérents
+        result = " ".join(cleaned_lines)
+        result = re.sub(r"[ \t]+", " ", result).strip()
+        return result
