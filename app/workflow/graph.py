@@ -37,13 +37,19 @@ workflow_graph = build_workflow_graph()
 def process_dossier_task(
     dossier_id: int,
     files: Dict[str, Any],
-    financial_data: Optional[Dict[str, Any]] = None
+    financial_data: Optional[Dict[str, Any]] = None,
+    stepper_data: Optional[Dict[str, Any]] = None,
+    test_data: Optional[Dict[str, Any]] = None,
+    client_info: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Background task runner executing the LangGraph pipeline for a specific dossier."""
     initial_state: WorkflowState = {
         "dossier_id": dossier_id,
         "file_paths": files or {},
         "financial_data": financial_data or {},
+        "stepper_data": stepper_data or {},
+        "test_data": test_data or {},
+        "client_info": client_info or {},
         "pdf_extracted_info": {},
         "narrative_report": {},
         "final_json": {},

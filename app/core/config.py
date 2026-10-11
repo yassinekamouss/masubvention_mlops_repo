@@ -1,5 +1,17 @@
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load environment from mlops .env or backend .env
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_mlops_env = os.path.abspath(os.path.join(_current_dir, "..", "..", ".env"))
+_backend_env = os.path.abspath(os.path.join(_current_dir, "..", "..", "..", "backend_tamkeen_mysql", ".env"))
+
+if os.path.exists(_mlops_env):
+    load_dotenv(_mlops_env)
+if os.path.exists(_backend_env):
+    load_dotenv(_backend_env)
+load_dotenv()
 
 
 class Settings:

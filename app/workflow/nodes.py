@@ -37,11 +37,17 @@ def virtual_consultant_node(state: WorkflowState) -> dict:
 
     pdf_info = state.get("pdf_extracted_info", {})
     financial_data = state.get("financial_data", {})
+    stepper_data = state.get("stepper_data", {})
+    test_data = state.get("test_data", {})
+    client_info = state.get("client_info", {})
     llm = LLMFactory.get_llm()
 
     narratives = VirtualConsultantService.generate_narratives(
         pdf_info=pdf_info,
         financial_data=financial_data,
+        stepper_data=stepper_data,
+        test_data=test_data,
+        client_info=client_info,
         llm=llm,
         dossier_id=dossier_id
     )
@@ -57,11 +63,17 @@ def consolidate_webhook_node(state: WorkflowState) -> dict:
     pdf_info = state.get("pdf_extracted_info", {})
     financial_data = state.get("financial_data", {})
     narratives = state.get("narrative_report", {})
+    stepper_data = state.get("stepper_data", {})
+    test_data = state.get("test_data", {})
+    client_info = state.get("client_info", {})
 
     final_json = WebhookService.build_consolidated_json(
         pdf_info=pdf_info,
         financial_data=financial_data,
-        narratives=narratives
+        narratives=narratives,
+        stepper_data=stepper_data,
+        test_data=test_data,
+        client_info=client_info
     )
 
     WebhookService.send_webhook(
@@ -70,3 +82,4 @@ def consolidate_webhook_node(state: WorkflowState) -> dict:
     )
 
     return {"final_json": final_json}
+

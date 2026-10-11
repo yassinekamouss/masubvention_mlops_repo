@@ -20,12 +20,18 @@ async def extract_dossier(
     """
     files_dict = request.files.model_dump() if hasattr(request.files, 'model_dump') else request.files.dict()
     financial_dict = request.financial_data or {}
+    stepper_dict = request.stepper_data or {}
+    test_dict = request.test_data or {}
+    client_dict = request.client_info or {}
 
     background_tasks.add_task(
         process_dossier_task,
         request.dossierId,
         files_dict,
-        financial_dict
+        financial_dict,
+        stepper_dict,
+        test_dict,
+        client_dict
     )
 
     logger.info(f"Dossier #{request.dossierId} queued for background AI processing.")

@@ -17,6 +17,18 @@ class ExtractionRequest(BaseModel):
         default_factory=dict,
         description="Grille financière déterministe précalculée par le moteur Express"
     )
+    stepper_data: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Données détaillées du projet saisies dans le formulaire stepper"
+    )
+    test_data: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Données issues du test d'éligibilité (CA 3 ans, statut, année création)"
+    )
+    client_info: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Données d'identification du client (nom entreprise, contact)"
+    )
 
 
 class ExtractionResponse(BaseModel):

@@ -7,6 +7,9 @@ class WorkflowState(TypedDict):
     dossier_id: int
     file_paths: Dict[str, Any]
     financial_data: Dict[str, Any]
+    stepper_data: Dict[str, Any]
+    test_data: Dict[str, Any]
+    client_info: Dict[str, Any]
     pdf_extracted_info: Dict[str, Any]
     narrative_report: Dict[str, Any]
     final_json: Dict[str, Any]

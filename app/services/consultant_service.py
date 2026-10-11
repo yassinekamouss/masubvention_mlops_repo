@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, Any, Optional
 from app.schemas.narrative import NarrativeReport
+from app.services.pdf_service import clean_arabic_text
 
 logger = logging.getLogger(__name__)
 
@@ -13,13 +14,33 @@ class VirtualConsultantService:
         cls,
         pdf_info: Dict[str, Any],
         financial_data: Dict[str, Any],
+        stepper_data: Optional[Dict[str, Any]] = None,
+        test_data: Optional[Dict[str, Any]] = None,
+        client_info: Optional[Dict[str, Any]] = None,
         llm: Optional[Any] = None,
         dossier_id: int = 0
     ) -> Dict[str, str]:
         """Generates the 4 strategic investment memorandum sections using LLM or deterministic expert rules."""
-        company_name = pdf_info.get("nom") if pdf_info.get("nom") != "Non renseigné" else "L'Entreprise"
-        forme_juridique = pdf_info.get("forme_juridique") if pdf_info.get("forme_juridique") != "Non renseigné" else "SARL"
-        secteur = pdf_info.get("branche_activite") if pdf_info.get("branche_activite") != "Non renseigné" else "Industrie & Services"
+        stepper_data = stepper_data or {}
+        test_data = test_data or {}
+        client_info = client_info or {}
+
+        company_name = (
+            pdf_info.get("nom")
+            if pdf_info.get("nom") and pdf_info.get("nom") != "Non renseigné"
+            else (client_info.get("nomEntreprise") or test_data.get("nomEntreprise") or "L'Entreprise")
+        )
+        forme_juridique = (
+            pdf_info.get("forme_juridique")
+            if pdf_info.get("forme_juridique") and pdf_info.get("forme_juridique") != "Non renseigné"
+            else (str(test_data.get("statutJuridique", "SARL")).upper())
+        )
+        secteur = (
+            test_data.get("branche") or
+            test_data.get("secteurTravail") or
+            (pdf_info.get("branche_activite") if pdf_info.get("branche_activite") != "Non renseigné" else None) or
+            "Industrie & Services"
+        )
 
         programme_inv = financial_data.get("programme_investissement", {})
         total_capex = programme_inv.get("total_mad") or 0
@@ -48,8 +69,8 @@ class VirtualConsultantService:
         ca_croisiere = max(ca_vals) if ca_vals else 2500
 
         projet_dict = financial_data.get("projet", {})
-        region = projet_dict.get("region") or "Casablanca-Settat"
-        lieu = projet_dict.get("lieu_realisation") or "Zone Industrielle"
+        region = stepper_data.get("region_id") or test_data.get("region") or projet_dict.get("region") or "Casablanca-Settat"
+        lieu = stepper_data.get("adresse_projet") or stepper_data.get("province_id") or projet_dict.get("lieu_realisation") or "Zone Industrielle"
 
         narratives = None
         if llm:
