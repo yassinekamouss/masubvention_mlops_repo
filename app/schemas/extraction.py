@@ -4,9 +4,9 @@ from pydantic import BaseModel, Field
 
 class ExtractionFiles(BaseModel):
     """File paths for the 3 required Moroccan administrative PDFs."""
-    file_fiscale: str = Field(default="", description="Chemin vers l'Attestation Fiscale")
-    file_rc: str = Field(default="", description="Chemin vers le Registre de Commerce (RC)")
-    file_cnss: str = Field(default="", description="Chemin vers l'Attestation d'Affiliation CNSS")
+    file_fiscale: Optional[str] = Field(default="", description="Chemin vers l'Attestation Fiscale")
+    file_rc: Optional[str] = Field(default="", description="Chemin vers le Registre de Commerce (RC)")
+    file_cnss: Optional[str] = Field(default="", description="Chemin vers l'Attestation d'Affiliation CNSS")
 
 
 class ExtractionRequest(BaseModel):
