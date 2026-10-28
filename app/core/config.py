@@ -33,6 +33,7 @@ class Settings:
         "http://localhost:5000/api/internal/webhook/dossier-completed"
     )
     WEBHOOK_TIMEOUT_SECONDS: float = float(os.getenv("WEBHOOK_TIMEOUT_SECONDS", "15.0"))
+    INTERNAL_WEBHOOK_SECRET: str = os.getenv("INTERNAL_WEBHOOK_SECRET", "")
 
     # LLM Settings
     DEEPSEEK_API_KEY: Optional[str] = os.getenv("DEEPSEEK_API_KEY")

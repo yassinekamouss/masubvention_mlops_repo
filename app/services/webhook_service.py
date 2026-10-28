@@ -281,10 +281,18 @@ class WebhookService:
             "result_json": final_json
         }
 
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if settings.INTERNAL_WEBHOOK_SECRET:
+            headers["X-Internal-Secret"] = settings.INTERNAL_WEBHOOK_SECRET
+            headers["Authorization"] = f"Bearer {settings.INTERNAL_WEBHOOK_SECRET}"
+
         try:
             response = httpx.post(
                 webhook_url,
                 json=payload,
+                headers=headers,
                 timeout=settings.WEBHOOK_TIMEOUT_SECONDS
             )
             logger.info(f"[{dossier_id}] Webhook envoyé à {webhook_url}. Code: {response.status_code}")
