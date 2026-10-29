@@ -1,12 +1,14 @@
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.core.auth import verify_internal_token
 from app.schemas.rules import MagicRuleRequest, MagicRuleResponse
 from app.services.rule_generator_service import RuleGeneratorService
 from app.core.llm_factory import LLMFactory
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_internal_token)])
+
 
 
 @router.post("/rules/generate", response_model=MagicRuleResponse, tags=["Magic Rules"])

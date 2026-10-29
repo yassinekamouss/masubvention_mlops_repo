@@ -1,12 +1,14 @@
 import logging
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 
+from app.core.auth import verify_internal_token
 from app.schemas.extraction import ExtractionRequest
 from app.workflow.graph import process_dossier_task
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_internal_token)])
+
 
 
 @router.post("/extract", tags=["Extraction"])

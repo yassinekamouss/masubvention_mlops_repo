@@ -1,8 +1,13 @@
+import hashlib
+import hmac
 import json
 import logging
 import re
+import time
 from typing import Dict, Any, Optional
+import uuid
 import httpx
+
 
 from app.core.config import settings
 from app.services.pdf_service import clean_arabic_text
@@ -274,24 +279,40 @@ class WebhookService:
 
     @classmethod
     def send_webhook(cls, dossier_id: int, final_json: Dict[str, Any]) -> bool:
-        """Dispatches the consolidated report to Express webhook endpoint."""
+        """Dispatches the consolidated report to Express webhook endpoint with anti-replay headers."""
         webhook_url = settings.EXPRESS_WEBHOOK_URL
         payload = {
             "dossierId": dossier_id,
             "result_json": final_json
         }
 
+        json_body = json.dumps(payload, separators=(',', ':'), ensure_ascii=False)
+        timestamp = str(int(time.time()))
+        nonce = str(uuid.uuid4())
+
         headers = {
             "Content-Type": "application/json",
+            "X-Webhook-Timestamp": timestamp,
+            "X-Webhook-Nonce": nonce,
         }
-        if settings.INTERNAL_WEBHOOK_SECRET:
-            headers["X-Internal-Secret"] = settings.INTERNAL_WEBHOOK_SECRET
-            headers["Authorization"] = f"Bearer {settings.INTERNAL_WEBHOOK_SECRET}"
+        secret = settings.INTERNAL_WEBHOOK_SECRET or ""
+        if secret:
+            headers["X-Internal-Secret"] = secret
+            headers["Authorization"] = f"Bearer {secret}"
+
+            # HMAC-SHA256 signature computation over ${timestamp}.${nonce}.${json_body}
+            signed_payload = f"{timestamp}.{nonce}.{json_body}"
+            signature_hex = hmac.new(
+                secret.encode("utf-8"),
+                signed_payload.encode("utf-8"),
+                hashlib.sha256
+            ).hexdigest()
+            headers["X-Webhook-Signature"] = f"sha256={signature_hex}"
 
         try:
             response = httpx.post(
                 webhook_url,
-                json=payload,
+                content=json_body.encode("utf-8"),
                 headers=headers,
                 timeout=settings.WEBHOOK_TIMEOUT_SECONDS
             )
@@ -300,3 +321,4 @@ class WebhookService:
         except Exception as e:
             logger.error(f"[{dossier_id}] Erreur lors de l'envoi du webhook à {webhook_url}: {e}")
             return False
+

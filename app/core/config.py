@@ -1,17 +1,13 @@
 import os
-from typing import Optional
+from typing import Optional, List
 from dotenv import load_dotenv
 
-# Load environment from mlops .env or backend .env
+# Load environment strictly from mlops .env (Hermetic separation)
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _mlops_env = os.path.abspath(os.path.join(_current_dir, "..", "..", ".env"))
-_backend_env = os.path.abspath(os.path.join(_current_dir, "..", "..", "..", "backend_tamkeen_mysql", ".env"))
 
 if os.path.exists(_mlops_env):
     load_dotenv(_mlops_env)
-if os.path.exists(_backend_env):
-    load_dotenv(_backend_env)
-load_dotenv()
 
 
 class Settings:
@@ -23,9 +19,18 @@ class Settings:
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "info")
 
-    # Server
-    HOST: str = os.getenv("HOST", "0.0.0.0")
+    # Server & Network Security
+    HOST: str = os.getenv("HOST", "127.0.0.1")
     PORT: int = int(os.getenv("PORT", "8000"))
+    ALLOWED_ORIGINS: List[str] = [
+        origin.strip()
+        for origin in (
+            os.getenv("ALLOWED_ORIGINS")
+            or os.getenv("CORS_ORIGINS")
+            or "http://127.0.0.1:5000,http://localhost:5000"
+        ).split(",")
+        if origin.strip()
+    ]
 
     # Webhook Integration
     EXPRESS_WEBHOOK_URL: str = os.getenv(

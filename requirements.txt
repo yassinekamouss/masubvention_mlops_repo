@@ -7,4 +7,6 @@ typing-extensions
 langgraph
 langchain-deepseek
 langchain-openai
+python-dotenv
+
 

@@ -252,12 +252,12 @@ class TestMLOpsPipeline(unittest.TestCase):
         """Vérifie l'API FastAPI et les endpoints /health et /api/v1/extract."""
         client = TestClient(main.app)
 
-        # Healthcheck
+        # Healthcheck (unauthenticated access allowed)
         res_health = client.get("/health")
         self.assertEqual(res_health.status_code, 200)
         self.assertEqual(res_health.json().get("status"), "ok")
 
-        # Extract
+        # Extract payload
         payload = {
             "dossierId": 123,
             "files": {
@@ -267,10 +267,27 @@ class TestMLOpsPipeline(unittest.TestCase):
             },
             "financial_data": self.mock_financial_data
         }
-        res_extract = client.post("/api/v1/extract", json=payload)
+
+        # 1. Unauthenticated request -> HTTP 401
+        res_unauth = client.post("/api/v1/extract", json=payload)
+        self.assertEqual(res_unauth.status_code, 401)
+
+        # 2. Invalid secret -> HTTP 403
+        res_bad = client.post("/api/v1/extract", json=payload, headers={"X-Internal-Secret": "invalid_secret"})
+        self.assertEqual(res_bad.status_code, 403)
+
+        # 3. Valid secret via X-Internal-Secret -> HTTP 200
+        headers_valid = {"X-Internal-Secret": settings.INTERNAL_WEBHOOK_SECRET}
+        res_extract = client.post("/api/v1/extract", json=payload, headers=headers_valid)
         self.assertEqual(res_extract.status_code, 200)
         self.assertEqual(res_extract.json()["status"], "processing")
         self.assertIn("Dossier 123 received", res_extract.json()["message"])
+
+        # 4. Root alias /extract with Bearer token -> HTTP 200
+        headers_bearer = {"Authorization": f"Bearer {settings.INTERNAL_WEBHOOK_SECRET}"}
+        res_root = client.post("/extract", json=payload, headers=headers_bearer)
+        self.assertEqual(res_root.status_code, 200)
+
 
     def test_magic_rules_single_branch(self):
         """Vérifie la génération d'un profil simple via RuleGeneratorService."""
@@ -322,7 +339,18 @@ class TestMLOpsPipeline(unittest.TestCase):
             "prompt": "PME à Marrakech dans le tourisme avec CA entre 500k et 5M MAD",
             "context": {"name": "Programme Tourisme Durable", "description": "Soutien régional"}
         }
-        res = client.post("/api/v1/rules/generate", json=payload)
+
+        # 1. Unauthenticated request -> HTTP 401
+        res_unauth = client.post("/api/v1/rules/generate", json=payload)
+        self.assertEqual(res_unauth.status_code, 401)
+
+        # 2. Invalid secret -> HTTP 403
+        res_bad = client.post("/api/v1/rules/generate", json=payload, headers={"X-Internal-Secret": "invalid_key"})
+        self.assertEqual(res_bad.status_code, 403)
+
+        # 3. Valid secret via X-Internal-Secret -> HTTP 200
+        headers_valid = {"X-Internal-Secret": settings.INTERNAL_WEBHOOK_SECRET}
+        res = client.post("/api/v1/rules/generate", json=payload, headers=headers_valid)
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertTrue(data["success"])
@@ -330,6 +358,53 @@ class TestMLOpsPipeline(unittest.TestCase):
         self.assertIn("Marrakech-Safi", data["profiles"][0]["regions"])
         self.assertIn("ActiviteTouristique", data["profiles"][0]["secteurs"])
 
+        # 4. Root alias /rules/generate with Bearer token -> HTTP 200
+        headers_bearer = {"Authorization": f"Bearer {settings.INTERNAL_WEBHOOK_SECRET}"}
+        res_root = client.post("/rules/generate", json=payload, headers=headers_bearer)
+        self.assertEqual(res_root.status_code, 200)
+        self.assertTrue(res_root.json()["success"])
+
+    def test_cors_and_security_configuration(self):
+        """Vérifie la restriction CORS et le masquage Swagger en production (F8)."""
+        import unittest.mock
+        from fastapi.testclient import TestClient
+        from app import create_app
+        from app.core import settings
+
+        # 1. Vérification des origines CORS autorisées
+        client = TestClient(main.app)
+        res_allowed_ip = client.get("/health", headers={"Origin": "http://127.0.0.1:5000"})
+        self.assertEqual(res_allowed_ip.status_code, 200)
+        self.assertEqual(res_allowed_ip.headers.get("access-control-allow-origin"), "http://127.0.0.1:5000")
+        self.assertEqual(res_allowed_ip.headers.get("access-control-allow-credentials"), "true")
+
+        res_allowed_named = client.get("/health", headers={"Origin": "http://localhost:5000"})
+        self.assertEqual(res_allowed_named.status_code, 200)
+        self.assertEqual(res_allowed_named.headers.get("access-control-allow-origin"), "http://localhost:5000")
+
+        # 2. Vérification du rejet des origines non autorisées
+        res_unauthorized = client.get("/health", headers={"Origin": "https://malicious-external-site.com"})
+        self.assertEqual(res_unauthorized.status_code, 200)
+        self.assertNotIn("access-control-allow-origin", res_unauthorized.headers)
+
+        # 3. Vérification de la désactivation complète de Swagger / Redoc / OpenAPI en production
+        with unittest.mock.patch.object(settings, "ENVIRONMENT", "production"):
+            prod_app = create_app()
+            prod_client = TestClient(prod_app)
+            self.assertEqual(prod_client.get("/docs").status_code, 404)
+            self.assertEqual(prod_client.get("/redoc").status_code, 404)
+            self.assertEqual(prod_client.get("/openapi.json").status_code, 404)
+            self.assertEqual(prod_client.get("/health").status_code, 200)
+
+        # 4. Vérification de la disponibilité de la documentation en développement
+        with unittest.mock.patch.object(settings, "ENVIRONMENT", "development"):
+            dev_app = create_app()
+            dev_client = TestClient(dev_app)
+            self.assertEqual(dev_client.get("/docs").status_code, 200)
+            self.assertEqual(dev_client.get("/redoc").status_code, 200)
+            self.assertEqual(dev_client.get("/openapi.json").status_code, 200)
+
 
 if __name__ == "__main__":
     unittest.main()
+
